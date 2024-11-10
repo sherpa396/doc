@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block content %}
+
+
+<div class="content container-fluid">
+    <div class="page-header">
+    <div class="row align-items-center">
+    <div class="col">
+    <h3 class="page-title">Appointments</h3>
+    <ul class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'doctor_home' %}">Dashboard</a></li>
+    <li class="breadcrumb-item active">Patient List</li>
+    </ul>
+    </div>
+    </div>
+    </div>
+    
+    <div class="row">
+    <div class="col-sm-12">
+    <div class="card card-table">
+    <div class="card-body">
+        {% if messages %}
+        {% for message in messages %}
+         {% if message.tags == 'error' %}
+       <div class="alert alert-warning alert-dismissible fade show" role="alert">
+      {{message}}
+     <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+     <span aria-hidden="true">&times;</span>
+         </button>
+          </div>
+       {% endif %}
+        {% endfor %}
+       {% endif %}
+           {% if messages %}
+        {% for message in messages %}
+         {% if message.tags == 'success' %}
+       <div class="alert alert-warning alert-dismissible fade show" role="alert">
+      {{message}}
+     <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+     <span aria-hidden="true">&times;</span>
+         </button>
+          </div>
+       {% endif %}
+        {% endfor %}
+       {% endif %}
+    <div class="table-responsive">
+    <table class="table table-hover table-center mb-0 datatable">
+    <thead>
+    <tr>
+   
+    <th>Appointment Number</th>
+    <th>Patient Name</th>
+    <th>Date of Appointment</th>
+    <th>Time of Appointment</th>
+    <th>Creation Date</th>
+    <th>Status</th>
+    <th class="text-right">Action</th>
+    </tr>
+    </thead>
+    <tbody>
+        {% for i in patientdetails1 %}
+    <tr>
+
+    <td>{{i.appointmentnumber}}</td>
+    <td>{{i.fullname}}</td>
+    <td>{{i.date_of_appointment}}</td>
+    <td>{{i.time_of_appointment}}</td>
+    <td>{{i.created_at}}</td>
+    {% if i.status == '0' %}
+    <td>Not Updated Yet</td>
+    {% else %}
+    <td>{{ i.status}}</td>{% endif %}
+    <td class="text-right">
+    <div class="actions">
+    <a href="{% url 'doctorappointmentlist' i.id %}">
+    <i class="btn btn-primary btn-block">View</i>
+    </a>
+  
+    </div>
+    </td>
+    </tr> {% endfor %}
+   
+    </tbody>
+    </table>
+    
+<!-- Pagination controls -->
+<div class="pagination" style="padding-top: 20px; padding-bottom: 20px; text-align: center;">
+    <nav aria-label="Page navigation">
+        <ul class="pagination">
+            <!-- Previous Button -->
+            {% if patientdetails1.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ patientdetails1.previous_page_number }}" aria-label="Previous">
+                    <span aria-hidden="true">&laquo; Previous</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Previous</span>
+            </li>
+            {% endif %}
+
+            <!-- Page Number Links -->
+            {% for page_num in patientdetails1.paginator.page_range %}
+                {% if patientdetails1.number == page_num %}
+                    <li class="page-item active" aria-current="page">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a>
+                    </li>
+                {% endif %}
+            {% endfor %}
+
+            <!-- Next Button -->
+            {% if patientdetails1.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ patientdetails1.next_page_number }}" aria-label="Next">
+                    <span aria-hidden="true">Next &raquo;</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">Next</span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+</div>
+
+<!--End of pagination -->
+    </div>
+    </div>
+    </div>
+    </div>
+    </div>
+    </div>
+
+{% endblock %}
