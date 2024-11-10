@@ -54,6 +54,7 @@ class Appointment(models.Model):
     recommendedtest = models.TextField(blank=True, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # status = models.CharField(max_length=20, default="new")
 
     def __str__(self):
         return f"Appointment #{self.appointmentnumber} - {self.fullname}"

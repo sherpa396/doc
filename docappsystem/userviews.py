@@ -5,7 +5,11 @@ import re
 from datetime import datetime
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from datetime import datetime
+from .scheduler import FCFSQueueScheduler  # Import the scheduler
+from dasapp.models import Appointment, DoctorReg
 
 
 def USERBASE(request):
@@ -46,162 +50,57 @@ def Index(request):
     return render(request, "index.html", context)
 
 
-# In-memory list to store appointment slots for quick conflict checks
-appointments = []
-
-def load_prebooked_appointments():
-    # Load existing appointments into the in-memory list
-    global appointments
-    appointments = list(Appointment.objects.values("doctor_id", "date_of_appointment", "time_of_appointment"))
-
-# Load appointments at startup
-load_prebooked_appointments()
-
-def book_appointment(doctor_id, appointment_date, appointment_time):
-    # Check for conflicts in the in-memory list
-    for appointment in appointments:
-        if (appointment["doctor_id"] == doctor_id and
-            appointment["date_of_appointment"] == appointment_date and
-            appointment["time_of_appointment"] == appointment_time):
-            return "The doctor is already booked for this time slot. Please select another date or time."
-
-    # No conflict; add the appointment details to the in-memory list
-    appointments.append({
-        "doctor_id": doctor_id,
-        "date_of_appointment": appointment_date,
-        "time_of_appointment": appointment_time
-    })
-    return None
-
-
+scheduler = FCFSQueueScheduler()  # Instantiate scheduler globally
 
 def create_appointment(request):
     doctorview = DoctorReg.objects.all()
     page = Page.objects.all()
 
     if request.method == "POST":
-        appointmentnumber = random.randint(100000000, 999999999)
-        fullname = request.POST.get("fullname")
-        email = request.POST.get("email")
-        mobilenumber = request.POST.get("mobilenumber")
-        address = request.POST.get("address")
-        age = request.POST.get("age")
-        gender = request.POST.get("gender")
-        appointmenttype = request.POST.get("appointmenttype")
-        date_of_appointment = request.POST.get("date_of_appointment")
-        time_of_appointment = request.POST.get("time_of_appointment")
-        doctor_id = request.POST.get("doctor_id")
-        additional_msg = request.POST.get("additional_msg")
+        appointment_data = {
+            'doctor_id': int(request.POST.get("doctor_id")),
+            'patient_name': request.POST.get("fullname"),
+            'email': request.POST.get("email"),
+            'phone': request.POST.get("mobilenumber"),
+            'preferred_date': request.POST.get("date_of_appointment"),
+        }
         
+        # Add to scheduler queue
+        appointment_id = scheduler.add_to_queue(appointment_data)
         
-        # Check if a valid doctor is selected
-        if doctor_id == "Choose Doctor" or not doctor_id.isdigit():
-            messages.error(request, "Please select a valid doctor.")
-            context = {
-                "doctorview": doctorview,
-                "page": page,
-                "fullname": fullname,
-                "email": email,
-                "mobilenumber": mobilenumber,
-                "date_of_appointment": date_of_appointment,
-                "time_of_appointment": time_of_appointment,
-            }
-            return render(request, "appointment.html", context)
-
-        # Convert doctor_id to integer after validation
-        doctor_id = int(doctor_id)
-
-        # Check if a user with the same email and phone number already has an appointment on the same date and doctor
-        existing_appointments = Appointment.objects.filter(
-            email=email,
-            mobilenumber=mobilenumber,
-            date_of_appointment=date_of_appointment,
-            doctor_id=doctor_id
-        )
+        # Process the queue
+        processed = scheduler.process_queue()
         
+        # Retrieve our appointment from the processed list
+        our_appointment = next((a for a in processed if a['appointment_id'] == appointment_id), None)
         
-        
-        # Validate that date_of_appointment is greater than today's date
-        try:
-            appointment_date = datetime.strptime(date_of_appointment, '%Y-%m-%d').date()
-            today_date = datetime.now().date()
-
-            if appointment_date <= today_date:
-                # If the appointment date is not in the future, display an error message
-                messages.error(request, "Please select a date in the future for your appointment")
-                return redirect('appointment')  # Redirect back to the appointment page
-        except ValueError:
-            # Handle invalid date format error
-            messages.error(request, "Invalid date format")
-            return redirect('appointment')  # Redirect back to the appointment page
-
-        if existing_appointments.exists():
-            messages.warning(request, "An appointment already exists for this email and phone number on the same date with the same doctor.")
-            context = {
-                "doctorview": doctorview,
-                "page": page,
-                "fullname": fullname,
-                "email": email,
-                "mobilenumber": mobilenumber,
-                "date_of_appointment": date_of_appointment,
-                "time_of_appointment": time_of_appointment,
-            }
-            return render(request, "appointment.html", context)
-
-        # Check for scheduling conflicts
-        conflict_message = book_appointment(doctor_id, date_of_appointment, time_of_appointment)
-        if conflict_message:
-            messages.warning(request, conflict_message)
-            context = {
-                "doctorview": doctorview,
-                "page": page,
-                "fullname": fullname,
-                "email": email,
-                "mobilenumber": mobilenumber,
-                "date_of_appointment": date_of_appointment,
-                "time_of_appointment": time_of_appointment,
-            }
-            return render(request, "appointment.html", context)
-
-        # No conflict; create new appointment in the database
-        try:
-            new_appointment = Appointment.objects.create(
-                appointmentnumber=appointmentnumber,
-                fullname=fullname,
-                email=email,
-                mobilenumber=mobilenumber,
-                address=address,
-                age=age,
-                gender=gender,
-                appointmenttype=appointmenttype,
-                date_of_appointment=date_of_appointment,
-                time_of_appointment=time_of_appointment,
-                doctor_id_id=doctor_id,
-                additional_msg=additional_msg,
+        if our_appointment:
+            # Create and save appointment in database
+            new_appointment = Appointment(
+                appointmentnumber=appointment_id,
+                fullname=appointment_data['patient_name'],
+                email=appointment_data['email'],
+                mobilenumber=appointment_data['phone'],
+                date_of_appointment=our_appointment['date'],
+                time_of_appointment=our_appointment['time'],
+                doctor_id_id=appointment_data['doctor_id'],
+                # status=AppointmentState.EXIT
             )
             new_appointment.save()
-            messages.success(request, "Your appointment request has been sent. We will contact you soon !!")
-
-            # Update in-memory list with the new appointment
-            appointments.append({
-                "doctor_id": doctor_id,
-                "date_of_appointment": date_of_appointment,
-                "time_of_appointment": time_of_appointment
-            })
-
-        except Exception as e:
-            messages.error(request, f"Error in booking appointment: {str(e)}")
-
+            
+            messages.success(
+                request,
+                f"Appointment scheduled for {our_appointment['date']} at {our_appointment['time']}"
+            )
+        else:
+            messages.error(request, "Could not schedule appointment at this time.")
+        
         return redirect("appointment")
-
-    context = {"doctorview": doctorview, "page": page}
+    
+    context = {
+        "doctorview": doctorview,"page": page
+    }
     return render(request, "appointment.html", context)
-
-
-
-
-
-
 
 
 
